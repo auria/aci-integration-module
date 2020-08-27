@@ -121,13 +121,8 @@ class AimManager(object):
                      api_res.SpanVdestGroup,
                      api_res.SpanVdest,
                      api_res.SpanVepgSummary,
-                     api_res.SpanSrcVport,
                      api_res.InfraAccBundleGroup,
                      api_res.InfraAccPortGroup,
-                     api_res.InfraRspanVsrcGroup,
-                     api_res.InfraRspanVsrcApGroup,
-                     api_res.InfraRspanVdestGroup,
-                     api_res.InfraRspanVdestApGroup,
                      api_res.SpanSpanlbl,
                      api_tree.ActionLog}
 

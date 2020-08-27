@@ -561,6 +561,35 @@ def bgp_extp_converter(object_dict, otype, helper,
     return result
 
 
+def span_rs_src_to_vport_converter(object_dict, otype, helper,
+                                   source_identity_attributes,
+                                   destination_identity_attributes,
+                                   to_aim=True):
+    result = []
+    if to_aim:
+        res_dict = {}
+        try:
+            id = default_identity_converter(object_dict, otype, helper,
+                                            to_aim=True)
+        except apic_client.DNManager.InvalidNameFormat:
+            return []
+        for index, attr in enumerate(destination_identity_attributes):
+            res_dict[attr] = id[index]
+        if object_dict.get('tDn'):
+            res_dict['src_paths'] = [{'path': object_dict['tDn']}]
+        result.append(default_to_resource(res_dict, helper, to_aim=True))
+    else:
+        for p in object_dict['src_paths']:
+            if p.get('path'):
+                dn = default_identity_converter(
+                    object_dict, otype, helper, extra_attributes=[p['path']],
+                    aci_mo_type=helper['resource'], to_aim=False)[0]
+                result.append({helper['resource']: {'attributes':
+                                                    {'dn': dn,
+                                                     'tDn': p['path']}}})
+    return result
+
+
 # Resource map maps APIC objects into AIM ones. the key of this map is the
 # object APIC type, while the values contain the followings:
 # - Resource: AIM resource when direct mapping is applicable
@@ -585,6 +614,10 @@ hostprotRemoteIp_converter = child_list('remote_ips', 'addr')
 fvRsBDToOut_converter = child_list('l3out_names', 'tnL3extOutName')
 fvRsProv_converter = child_list('provided_contract_names', 'tnVzBrCPName')
 fvRsCons_converter = child_list('consumed_contract_names', 'tnVzBrCPName')
+infraRsSpanVSrcGrp_converter = child_list('span_vsource_group_names',
+                                          'tnSpanVSrcGrpName')
+infraRsSpanVDestGrp_converter = child_list('span_vdest_group_names',
+                                           'tnSpanVDestGrpName')
 vzRsSubjFiltAtt_converter = child_list('bi_filters', 'tnVzFilterName')
 vzInTerm_vzRsFiltAtt_converter = child_list('in_filters', 'tnVzFilterName',
                                             aci_mo='vzRsFiltAtt__In')
@@ -594,6 +627,12 @@ fvRsProv_Ext_converter = child_list('provided_contract_names', 'tnVzBrCPName',
                                     aci_mo='fvRsProv__Ext')
 fvRsCons_Ext_converter = child_list('consumed_contract_names', 'tnVzBrCPName',
                                     aci_mo='fvRsCons__Ext')
+infraRsSpanVSrcGrp_ap_converter = child_list('span_vsource_group_names',
+                                             'tnSpanVSrcGrpName',
+                                             aci_mo='infraRsSpanVSrcGrp__ap')
+infraRsSpanVDestGrp_ap_converter = child_list('span_vdest_group_names',
+                                              'tnSpanVDestGrpName',
+                                              aci_mo='infraRsSpanVDestGrp__ap')
 vmmInjectedSvcPort_converter = utils.list_dict(
     'service_ports',
     {'port': {'other': 'port',
@@ -1053,6 +1092,7 @@ resource_map = {
     }],
     'spanVSrc': [{
         'resource': resource.SpanVsource,
+        'skip': ['src_paths'],
     }],
     'spanVDestGrp': [{
         'resource': resource.SpanVdestGroup,
@@ -1064,25 +1104,32 @@ resource_map = {
         'resource': resource.SpanVepgSummary,
     }],
     'spanRsSrcToVPort': [{
-        'resource': resource.SpanSrcVport,
+        'resource': resource.SpanVsource,
+        'converter': span_rs_src_to_vport_converter,
     }],
     'infraAccBndlGrp': [{
         'resource': resource.InfraAccBundleGroup,
+        'skip': ['span_vsource_group_names', 'span_vdest_group_names'],
     }],
     'infraAccPortGrp': [{
         'resource': resource.InfraAccPortGroup,
+        'skip': ['span_vsource_group_names', 'span_vdest_group_names'],
     }],
     'infraRsSpanVSrcGrp': [{
-        'resource': resource.InfraRspanVsrcGroup,
+        'resource': resource.InfraAccBundleGroup,
+        'converter': infraRsSpanVSrcGrp_converter,
     }],
     'infraRsSpanVSrcGrp__ap': [{
-        'resource': resource.InfraRspanVsrcApGroup,
+        'resource': resource.InfraAccPortGroup,
+        'converter': infraRsSpanVSrcGrp_ap_converter,
     }],
     'infraRsSpanVDestGrp': [{
-        'resource': resource.InfraRspanVdestGroup,
+        'resource': resource.InfraAccBundleGroup,
+        'converter': infraRsSpanVDestGrp_converter,
     }],
     'infraRsSpanVDestGrp__ap': [{
-        'resource': resource.InfraRspanVdestApGroup,
+        'resource': resource.InfraAccPortGroup,
+        'converter': infraRsSpanVDestGrp_ap_converter,
     }],
     'spanSpanLbl': [{
         'resource': resource.SpanSpanlbl,

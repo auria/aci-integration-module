@@ -907,12 +907,6 @@ class TestSpanVepgSummary(test_aim_manager.TestSpanVepgSummaryMixin,
     pass
 
 
-class TestSpanSrcVport(test_aim_manager.TestSpanSrcVportMixin,
-                       TestManagerResourceOpsBase,
-                       base.TestShell):
-    pass
-
-
 class TestInfraAccBundleGroup(test_aim_manager.TestInfraAccBundleGroupMixin,
                               TestManagerResourceOpsBase,
                               base.TestShell):
@@ -922,32 +916,6 @@ class TestInfraAccBundleGroup(test_aim_manager.TestInfraAccBundleGroupMixin,
 class TestInfraAccPortGroup(test_aim_manager.TestInfraAccPortGroupMixin,
                             TestManagerResourceOpsBase,
                             base.TestShell):
-    pass
-
-
-class TestInfraRspanVsrcGroup(test_aim_manager.TestInfraRspanVsrcGroupMixin,
-                              TestManagerResourceOpsBase,
-                              base.TestShell):
-    pass
-
-
-class TestInfraRspanVsrcApGroup(
-        test_aim_manager.TestInfraRspanVsrcApGroupMixin,
-        TestManagerResourceOpsBase,
-        base.TestShell):
-    pass
-
-
-class TestInfraRspanVdestGroup(test_aim_manager.TestInfraRspanVdestGroupMixin,
-                               TestManagerResourceOpsBase,
-                               base.TestShell):
-    pass
-
-
-class TestInfraRspanVdestApGroup(
-        test_aim_manager.TestInfraRspanVdestApGroupMixin,
-        TestManagerResourceOpsBase,
-        base.TestShell):
     pass
 
 

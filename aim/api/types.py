@@ -155,4 +155,8 @@ next_hop = {
     "properties": {"addr": ip,
                    "preference": {"type": "string"}}}
 list_of_next_hop = {"type": "array", "items": next_hop}
+src_path = {
+    "type": "object",
+    "properties": {"path": {"type": "string"}}}
+list_of_src_paths = {"type": "array", "items": src_path}
 epoch = integer

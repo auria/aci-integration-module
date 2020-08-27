@@ -1263,6 +1263,19 @@ class SpanVsourceGroup(model_base.Base, model_base.HasDisplayName,
     admin_st = sa.Column(sa.Enum('start', 'stop'))
 
 
+class SpanSrcPath(model_base.Base):
+    """DB model for static-paths configured for an EPG."""
+
+    __tablename__ = 'aim_span_src_paths'
+
+    vsrc_aim_id = sa.Column(sa.String(255),
+                            sa.ForeignKey('aim_span_vsource.aim_id'),
+                            primary_key=True)
+    # Use VARCHAR with ASCII encoding to work-around MySQL limitations
+    # on the length of primary keys
+    path = sa.Column(VARCHAR(512, charset='latin1'), primary_key=True)
+
+
 class SpanVsource(model_base.Base, model_base.HasDisplayName,
                   model_base.HasAimId, model_base.AttributeMixin,
                   model_base.IsMonitored, model_base.HasName):
@@ -1275,6 +1288,29 @@ class SpanVsource(model_base.Base, model_base.HasDisplayName,
 
     vsg_name = model_base.name_column(nullable=False)
     dir = sa.Column(sa.Enum('in', 'out', 'both'))
+
+    paths = orm.relationship(SpanSrcPath,
+                             backref='span_vsrc',
+                             cascade='all, delete-orphan',
+                             lazy='joined')
+
+    def from_attr(self, session, res_attr):
+        if 'src_paths' in res_attr:
+            src_paths = []
+            for p in (res_attr.pop('src_paths', []) or []):
+                if p.get('path'):
+                    src_paths.append(SpanSrcPath(
+                        path=p['path']))
+            self.paths = src_paths
+        # map remaining attributes to model
+        super(SpanVsource, self).from_attr(session, res_attr)
+
+    def to_attr(self, session):
+        res_attr = super(SpanVsource, self).to_attr(session)
+        for p in res_attr.pop('paths', []):
+            src_path = {'path': p.path}
+            res_attr.setdefault('src_paths', []).append(src_path)
+        return res_attr
 
 
 class SpanVdestGroup(model_base.Base, model_base.HasDisplayName,
@@ -1316,20 +1352,36 @@ class SpanVepgSummary(model_base.Base, model_base.HasDisplayName,
     flow_id = sa.Column(sa.Integer)
     ttl = sa.Column(sa.Integer)
     mtu = sa.Column(sa.Integer)
+    invalid = sa.Column(sa.Boolean)
+    mode = sa.Column(sa.Enum('visible', 'not-visible'))
+    route_ip = sa.Column(sa.String(64))
+    scope = sa.Column(sa.Enum('public', 'private', 'shared'))
+    src_ip_prefix = sa.Column(sa.String(64))
+    ver = sa.Column(sa.Enum('ver1', 'ver2'))
+    ver_enforced = sa.Column(sa.Boolean)
+    dscp = sa.Column(sa.Integer)
 
 
-class SpanSrcVport(model_base.Base, model_base.HasAimId,
-                   model_base.AttributeMixin, model_base.IsMonitored):
-    """DB model for ERSPAN Source to VPort Relation"""
+class InfraRspanVsrcGroup(model_base.Base):
+    """DB model for source relation to all eps using acc bndle groups"""
 
-    __tablename__ = 'aim_span_src_vport'
-    __table_args__ = (model_base.uniq_column(__tablename__, 'vsg_name',
-                                             'vs_name', 'src_path') +
-                      model_base.to_tuple(model_base.Base.__table_args__))
+    __tablename__ = 'aim_infra_rspan_vsrc_grp'
 
-    vsg_name = model_base.name_column(nullable=False)
-    vs_name = model_base.name_column(nullable=False)
-    src_path = sa.Column(VARCHAR(512, charset='latin1'), nullable=False)
+    accgrp_aim_id = sa.Column(sa.String(255),
+                              sa.ForeignKey('aim_infra_acc_bundle_grp.aim_id'),
+                              primary_key=True)
+    name = model_base.name_column(primary_key=True)
+
+
+class InfraRspanVdestGroup(model_base.Base):
+    """DB model for source relation to all eps using acc bndle groups"""
+
+    __tablename__ = 'aim_infra_rspan_vdest_grp'
+
+    accgrp_aim_id = sa.Column(sa.String(255),
+                              sa.ForeignKey('aim_infra_acc_bundle_grp.aim_id'),
+                              primary_key=True)
+    name = model_base.name_column(primary_key=True)
 
 
 class InfraAccBundleGroup(model_base.Base, model_base.HasDisplayName,
@@ -1341,6 +1393,63 @@ class InfraAccBundleGroup(model_base.Base, model_base.HasDisplayName,
     __table_args__ = (model_base.uniq_column(__tablename__, 'name') +
                       model_base.to_tuple(model_base.Base.__table_args__))
 
+    lag_t = sa.Column(sa.Enum('link', 'node'))
+
+    vsource_grps = orm.relationship(InfraRspanVsrcGroup,
+                                    backref='acc_bundle',
+                                    cascade='all, delete-orphan',
+                                    lazy='joined')
+
+    vdest_grps = orm.relationship(InfraRspanVdestGroup,
+                                  backref='acc_bundle',
+                                  cascade='all, delete-orphan',
+                                  lazy='joined')
+
+    def from_attr(self, session, res_attr):
+        if 'span_vsource_group_names' in res_attr:
+            span_vsource_group_names = []
+            for l in (res_attr.pop('span_vsource_group_names', []) or []):
+                span_vsource_group_names.append(InfraRspanVsrcGroup(name=l))
+            self.vsource_grps = span_vsource_group_names
+
+        if 'span_vdest_group_names' in res_attr:
+            span_vdest_group_names = []
+            for l in (res_attr.pop('span_vdest_group_names', []) or []):
+                span_vdest_group_names.append(InfraRspanVdestGroup(name=l))
+            self.vdest_grps = span_vdest_group_names
+        # map remaining attributes to model
+        super(InfraAccBundleGroup, self).from_attr(session, res_attr)
+
+    def to_attr(self, session):
+        res_attr = super(InfraAccBundleGroup, self).to_attr(session)
+        for l in res_attr.pop('vsource_grps', []):
+            res_attr.setdefault('span_vsource_group_names', []).append(l.name)
+        for l in res_attr.pop('vdest_grps', []):
+            res_attr.setdefault('span_vdest_group_names', []).append(l.name)
+        return res_attr
+
+
+class InfraRspanVsrcApGroup(model_base.Base):
+    """DB model for source relation to all eps using acc ports groups"""
+
+    __tablename__ = 'aim_infra_rspan_vsrc_ap_grp'
+
+    accport_aim_id = sa.Column(sa.String(255),
+                               sa.ForeignKey('aim_infra_acc_port_grp.aim_id'),
+                               primary_key=True)
+    name = model_base.name_column(primary_key=True)
+
+
+class InfraRspanVdestApGroup(model_base.Base):
+    """DB model for source relation to all eps using acc ports groups"""
+
+    __tablename__ = 'aim_infra_rspan_vdest_ap_grp'
+
+    accport_aim_id = sa.Column(sa.String(255),
+                               sa.ForeignKey('aim_infra_acc_port_grp.aim_id'),
+                               primary_key=True)
+    name = model_base.name_column(primary_key=True)
+
 
 class InfraAccPortGroup(model_base.Base, model_base.HasDisplayName,
                         model_base.HasAimId, model_base.AttributeMixin,
@@ -1351,57 +1460,37 @@ class InfraAccPortGroup(model_base.Base, model_base.HasDisplayName,
     __table_args__ = (model_base.uniq_column(__tablename__, 'name') +
                       model_base.to_tuple(model_base.Base.__table_args__))
 
+    vsource_grps = orm.relationship(InfraRspanVsrcApGroup,
+                                    backref='acc_port',
+                                    cascade='all, delete-orphan',
+                                    lazy='joined')
 
-class InfraRspanVsrcGroup(model_base.Base, model_base.HasAimId,
-                          model_base.AttributeMixin, model_base.IsMonitored,
-                          model_base.HasName):
-    """DB model for source relation to all eps using acc bndle groups"""
+    vdest_grps = orm.relationship(InfraRspanVdestApGroup,
+                                  backref='acc_port',
+                                  cascade='all, delete-orphan',
+                                  lazy='joined')
 
-    __tablename__ = 'aim_infra_rspan_vsrc_grp'
-    __table_args__ = (model_base.uniq_column(__tablename__,
-                                             'acc_bndle_grp_name', 'name') +
-                      model_base.to_tuple(model_base.Base.__table_args__))
+    def from_attr(self, session, res_attr):
+        if 'span_vsource_group_names' in res_attr:
+            span_vsource_group_names = []
+            for l in (res_attr.pop('span_vsource_group_names', []) or []):
+                span_vsource_group_names.append(InfraRspanVsrcApGroup(name=l))
+            self.vsource_grps = span_vsource_group_names
+        if 'span_vdest_group_names' in res_attr:
+            span_vdest_group_names = []
+            for l in (res_attr.pop('span_vdest_group_names', []) or []):
+                span_vdest_group_names.append(InfraRspanVdestApGroup(name=l))
+            self.vdest_grps = span_vdest_group_names
+        # map remaining attributes to model
+        super(InfraAccPortGroup, self).from_attr(session, res_attr)
 
-    acc_bndle_grp_name = model_base.name_column(nullable=False)
-
-
-class InfraRspanVsrcApGroup(model_base.Base, model_base.HasAimId,
-                            model_base.AttributeMixin, model_base.IsMonitored,
-                            model_base.HasName):
-    """DB model for source relation to all eps using acc ports groups"""
-
-    __tablename__ = 'aim_infra_rspan_vsrc_ap_grp'
-    __table_args__ = (model_base.uniq_column(__tablename__,
-                                             'acc_port_grp_name', 'name') +
-                      model_base.to_tuple(model_base.Base.__table_args__))
-
-    acc_port_grp_name = model_base.name_column(nullable=False)
-
-
-class InfraRspanVdestGroup(model_base.Base, model_base.HasAimId,
-                           model_base.AttributeMixin, model_base.IsMonitored,
-                           model_base.HasName):
-    """DB model for source relation to all eps using acc bndle groups"""
-
-    __tablename__ = 'aim_infra_rspan_vdest_grp'
-    __table_args__ = (model_base.uniq_column(__tablename__,
-                                             'acc_bndle_grp_name', 'name') +
-                      model_base.to_tuple(model_base.Base.__table_args__))
-
-    acc_bndle_grp_name = model_base.name_column(nullable=False)
-
-
-class InfraRspanVdestApGroup(model_base.Base, model_base.HasAimId,
-                             model_base.AttributeMixin, model_base.IsMonitored,
-                             model_base.HasName):
-    """DB model for source relation to all eps using acc ports groups"""
-
-    __tablename__ = 'aim_infra_rspan_vdest_ap_grp'
-    __table_args__ = (model_base.uniq_column(__tablename__,
-                                             'acc_port_grp_name', 'name') +
-                      model_base.to_tuple(model_base.Base.__table_args__))
-
-    acc_port_grp_name = model_base.name_column(nullable=False)
+    def to_attr(self, session):
+        res_attr = super(InfraAccPortGroup, self).to_attr(session)
+        for l in res_attr.pop('vsource_grps', []):
+            res_attr.setdefault('span_vsource_group_names', []).append(l.name)
+        for l in res_attr.pop('vdest_grps', []):
+            res_attr.setdefault('span_vdest_group_names', []).append(l.name)
+        return res_attr
 
 
 class SpanSpanlbl(model_base.Base, model_base.HasDisplayName,
@@ -1415,3 +1504,4 @@ class SpanSpanlbl(model_base.Base, model_base.HasDisplayName,
                       model_base.to_tuple(model_base.Base.__table_args__))
 
     vsg_name = model_base.name_column(nullable=False)
+    tag = sa.Column(sa.String(64))

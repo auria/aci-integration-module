@@ -100,6 +100,14 @@ def upgrade():
         sa.Column('flow_id', sa.Integer),
         sa.Column('ttl', sa.Integer),
         sa.Column('mtu', sa.Integer),
+        sa.Column('invalid', sa.Boolean),
+        sa.Column('mode', sa.Enum('visible', 'not-visible')),
+        sa.Column('route_ip', sa.String(64)),
+        sa.Column('scope', sa.Enum('public', 'private', 'shared')),
+        sa.Column('src_ip_prefix', sa.String(64)),
+        sa.Column('ver', sa.Enum('ver1', 'ver2')),
+        sa.Column('ver_enforced', sa.Boolean),
+        sa.Column('dscp', sa.Integer),
         sa.Column('display_name', sa.String(256), nullable=False, default=''),
         sa.Column('monitored', sa.Boolean, nullable=False, default=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
@@ -115,29 +123,21 @@ def upgrade():
             name='fk_vepg_sum'))
 
     op.create_table(
-        'aim_span_src_vport',
-        sa.Column('aim_id', sa.String(64), nullable=False),
-        sa.Column('vsg_name', sa.String(64), nullable=False),
-        sa.Column('vs_name', sa.String(64), nullable=False),
-        sa.Column('src_path', VARCHAR(512, charset='latin1'), nullable=False),
-        sa.Column('monitored', sa.Boolean, nullable=False, default=False),
+        'aim_span_src_paths',
+        sa.Column('vsrc_aim_id', sa.String(255), nullable=False),
+        sa.Column('path', VARCHAR(512, charset='latin1'), nullable=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
                   server_default='0'),
-        sa.PrimaryKeyConstraint('aim_id'),
-        sa.UniqueConstraint('vsg_name', 'vs_name', 'src_path',
-                            name='uniq_aim_span_src_vport_identity'),
-        sa.Index('idx_aim_span_src_vport_identity', 'vsg_name',
-                 'vs_name', 'src_path'),
+        sa.PrimaryKeyConstraint('vsrc_aim_id', 'path'),
         sa.ForeignKeyConstraint(
-            ['vsg_name', 'vs_name'],
-            ['aim_span_vsource.vsg_name', 'aim_span_vsource.name'],
-            name='fk_vport_sum'))
+            ['vsrc_aim_id'], ['aim_span_vsource.aim_id']))
 
     op.create_table(
         'aim_infra_acc_bundle_grp',
         sa.Column('aim_id', sa.String(64), nullable=False),
         sa.Column('name', sa.String(64), nullable=False),
         sa.Column('display_name', sa.String(256), nullable=False, default=''),
+        sa.Column('lag_t', sa.Enum('link', 'node')),
         sa.Column('monitored', sa.Boolean, nullable=False, default=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
                   server_default='0'),
@@ -161,43 +161,30 @@ def upgrade():
 
     op.create_table(
         'aim_infra_rspan_vsrc_grp',
-        sa.Column('aim_id', sa.String(64), nullable=False),
+        sa.Column('accgrp_aim_id', sa.String(255), nullable=False),
         sa.Column('name', sa.String(64), nullable=False),
-        sa.Column('acc_bndle_grp_name', sa.String(64), nullable=False),
-        sa.Column('monitored', sa.Boolean, nullable=False, default=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
                   server_default='0'),
-        sa.PrimaryKeyConstraint('aim_id'),
-        sa.UniqueConstraint('acc_bndle_grp_name', 'name',
-                            name='uniq_aim_infra_rspan_vsrc_grp_identity'),
-        sa.Index('idx_aim_infra_rspan_vsrc_grp_identity',
-                 'acc_bndle_grp_name', 'name'),
+        sa.PrimaryKeyConstraint('accgrp_aim_id', 'name'),
         sa.ForeignKeyConstraint(
-            ['acc_bndle_grp_name'], ['aim_infra_acc_bundle_grp.name'],
-            name='fk_rspan'))
+            ['accgrp_aim_id'], ['aim_infra_acc_bundle_grp.aim_id']))
 
     op.create_table(
         'aim_infra_rspan_vsrc_ap_grp',
-        sa.Column('aim_id', sa.String(64), nullable=False),
+        sa.Column('accport_aim_id', sa.String(255), nullable=False),
         sa.Column('name', sa.String(64), nullable=False),
-        sa.Column('acc_port_grp_name', sa.String(64), nullable=False),
-        sa.Column('monitored', sa.Boolean, nullable=False, default=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
                   server_default='0'),
-        sa.PrimaryKeyConstraint('aim_id'),
-        sa.UniqueConstraint('acc_port_grp_name', 'name',
-                            name='uniq_aim_infra_rspan_vsrc_ap_grp_identity'),
-        sa.Index('idx_aim_infra_rspan_vsrc_ap_grp_identity',
-                 'acc_port_grp_name', 'name'),
+        sa.PrimaryKeyConstraint('accport_aim_id', 'name'),
         sa.ForeignKeyConstraint(
-            ['acc_port_grp_name'], ['aim_infra_acc_port_grp.name'],
-            name='fk_rspan_ap'))
+            ['accport_aim_id'], ['aim_infra_acc_port_grp.aim_id']))
 
     op.create_table(
         'aim_span_spanlbl',
         sa.Column('aim_id', sa.String(64), nullable=False),
         sa.Column('name', sa.String(64), nullable=False),
         sa.Column('vsg_name', sa.String(64), nullable=False),
+        sa.Column('tag', sa.String(64)),
         sa.Column('display_name', sa.String(256), nullable=False, default=''),
         sa.Column('monitored', sa.Boolean, nullable=False, default=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
@@ -211,37 +198,23 @@ def upgrade():
 
     op.create_table(
         'aim_infra_rspan_vdest_grp',
-        sa.Column('aim_id', sa.String(64), nullable=False),
+        sa.Column('accgrp_aim_id', sa.String(255), nullable=False),
         sa.Column('name', sa.String(64), nullable=False),
-        sa.Column('acc_bndle_grp_name', sa.String(64), nullable=False),
-        sa.Column('monitored', sa.Boolean, nullable=False, default=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
                   server_default='0'),
-        sa.PrimaryKeyConstraint('aim_id'),
-        sa.UniqueConstraint('acc_bndle_grp_name', 'name',
-                            name='uniq_aim_infra_rspan_vdest_grp_identity'),
-        sa.Index('idx_aim_infra_rspan_vdest_grp_identity',
-                 'acc_bndle_grp_name', 'name'),
+        sa.PrimaryKeyConstraint('accgrp_aim_id', 'name'),
         sa.ForeignKeyConstraint(
-            ['acc_bndle_grp_name'], ['aim_infra_acc_bundle_grp.name'],
-            name='fk_rdest'))
+            ['accgrp_aim_id'], ['aim_infra_acc_bundle_grp.aim_id']))
 
     op.create_table(
         'aim_infra_rspan_vdest_ap_grp',
-        sa.Column('aim_id', sa.String(64), nullable=False),
+        sa.Column('accport_aim_id', sa.String(255), nullable=False),
         sa.Column('name', sa.String(64), nullable=False),
-        sa.Column('acc_port_grp_name', sa.String(64), nullable=False),
-        sa.Column('monitored', sa.Boolean, nullable=False, default=False),
         sa.Column('epoch', sa.BigInteger(), nullable=False,
                   server_default='0'),
-        sa.PrimaryKeyConstraint('aim_id'),
-        sa.UniqueConstraint('acc_port_grp_name', 'name',
-                            name='uniq_aim_infra_rspan_vdest_ap_grp_identity'),
-        sa.Index('idx_aim_infra_rspan_vdest_ap_grp_identity',
-                 'acc_port_grp_name', 'name'),
+        sa.PrimaryKeyConstraint('accport_aim_id', 'name'),
         sa.ForeignKeyConstraint(
-            ['acc_port_grp_name'], ['aim_infra_acc_port_grp.name'],
-            name='fk_rdest_ap'))
+            ['accport_aim_id'], ['aim_infra_acc_port_grp.aim_id']))
 
 
 def downgrade():
